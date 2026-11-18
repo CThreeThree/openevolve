@@ -438,6 +438,21 @@ class EvaluatorConfig:
     # Settable via YAML ('evaluator.evaluator_args') or the --evaluator-args CLI flag.
     evaluator_args: Optional[Dict[str, Any]] = None
 
+    # Where evaluations run: "local" (import evaluate() here) or "c3" (each evaluation is a
+    # C3 job; see openevolve/c3_evaluator.py). The API key is read from C3_API_KEY only.
+    backend: str = "local"
+    c3_hardware: str = "l40"  # C3 hardware profile (`c3 list --all`)
+    c3_provider: Optional[str] = None
+    c3_queue_timeout: int = 1800  # seconds a job may wait for compute before it is cancelled
+    c3_project: str = "openevolve"
+    c3_api_endpoint: Optional[str] = None  # default: $C3_API_ENDPOINT or https://api.cthree.cloud
+    c3_include: List[str] = field(
+        default_factory=list
+    )  # extra files (relative to the evaluator) to ship
+    c3_requirements: Optional[str] = (
+        None  # pip requirements installed in the job (default: requirements.txt beside the evaluator)
+    )
+
 
 @dataclass
 class EvolutionTraceConfig:

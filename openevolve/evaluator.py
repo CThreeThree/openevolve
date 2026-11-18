@@ -83,6 +83,18 @@ class Evaluator:
         if not os.path.exists(self.evaluation_file):
             raise ValueError(f"Evaluation file {self.evaluation_file} not found")
 
+        if self.config.backend == "c3":
+            # Evaluate on C3 jobs: never import the user's evaluator locally (it may need a GPU).
+            from openevolve.c3_evaluator import C3RemoteEvaluate
+
+            self.evaluate_function = C3RemoteEvaluate(self.evaluation_file, self.config)
+            self._evaluator_kwargs = {}  # evaluator_args are applied inside the job
+            return
+        if self.config.backend != "local":
+            raise ValueError(
+                f"Unknown evaluator.backend {self.config.backend!r} (use 'local' or 'c3')"
+            )
+
         try:
             # Add the evaluation file's directory to Python path so it can import local modules
             eval_dir = os.path.dirname(os.path.abspath(self.evaluation_file))
@@ -263,7 +275,7 @@ class Evaluator:
 
             try:
                 # Run evaluation
-                if self.config.cascade_evaluation:
+                if self.config.cascade_evaluation and self.config.backend == "local":
                     # Run cascade evaluation
                     result = await self._cascade_evaluate(temp_file_path)
                 else:
@@ -458,7 +470,11 @@ class Evaluator:
             )
 
         # Run the evaluation with timeout - let exceptions bubble up for retry handling
-        result = await asyncio.wait_for(run_evaluation(), timeout=self.config.timeout)
+        # A C3 job may first wait for compute; C3RemoteEvaluate enforces both limits itself.
+        timeout = self.config.timeout
+        if self.config.backend == "c3":
+            timeout += self.config.c3_queue_timeout + 300
+        result = await asyncio.wait_for(run_evaluation(), timeout=timeout)
 
         # Return result as-is to be processed by _process_evaluation_result
         # This supports both dict and EvaluationResult returns, just like _cascade_evaluate
